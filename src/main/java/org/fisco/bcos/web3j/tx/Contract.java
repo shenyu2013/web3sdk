@@ -10,6 +10,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
+import org.fisco.bcos.web3j.crypto.*;
 import org.fisco.bcos.channel.client.TransactionSucCallback;
 import org.fisco.bcos.channel.event.filter.EventLogPushWithDecodeCallback;
 import org.fisco.bcos.channel.event.filter.EventLogUserParams;
@@ -371,6 +372,28 @@ public abstract class Contract extends ManagedTransaction {
         return callback.receipt;
     }
 
+    protected TransactionReceipt executeTransactionEnhanced(Function function)
+        throws IOException, TransactionException {
+
+        Callback callback = new Callback();
+
+        String signedTransaction = asyncExecuteTransactionFirst(FunctionEncoder.encode(function), function.getName());
+        String txLocalHash = Hash.sha3(signedTransaction);
+        //System.out.println("local hash is: "+txLocalHash);
+        asyncExecuteTransactionSecond(signedTransaction, callback);
+        try {
+            callback.semaphore.acquire(1);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            TransactionReceipt receipt = new TransactionReceipt();
+            receipt.setTransactionHash(txLocalHash);
+            receipt.setStatus("-999");
+            return receipt;
+        }
+
+        return callback.receipt;
+    }
+
     /**
      * Given the duration required to execute a transaction.
      *
@@ -454,6 +477,25 @@ public abstract class Contract extends ManagedTransaction {
                 callback);
     }
 
+    protected String asyncExecuteTransactionFirst(
+            String data, String funName)throws IOException, TransactionException {
+        return sendOnlyFirst(
+                contractAddress,
+                data,
+                BigInteger.ZERO,
+                gasProvider.getGasPrice(funName),
+                gasProvider.getGasLimit(funName)
+        );
+    }
+
+    protected void asyncExecuteTransactionSecond(
+            String signedTransaction, TransactionSucCallback callback)throws IOException, TransactionException{
+        sendOnlySecond(
+                signedTransaction,
+                callback);
+    }
+
+
     protected String createTransactionSeq(Function function) {
         try {
             String signedTransaction =
@@ -486,6 +528,10 @@ public abstract class Contract extends ManagedTransaction {
 
     protected RemoteCall<TransactionReceipt> executeRemoteCallTransaction(Function function) {
         return new RemoteCall<>(() -> executeTransaction(function));
+    }
+
+    protected RemoteCall<TransactionReceipt> executeRemoteCallTransactionEnhanced(Function function) {
+        return new RemoteCall<>(() -> executeTransactionEnhanced(function));
     }
 
     private static <T extends Contract> T create(

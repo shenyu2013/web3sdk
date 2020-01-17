@@ -52,6 +52,26 @@ public abstract class ManagedTransaction {
         transactionManager.sendTransaction(gasPrice, gasLimit, to, data, value, null, callback);
     }
 
+    protected String sendOnlyFirst(
+            String to,
+            String data,
+            BigInteger value,
+            BigInteger gasPrice,
+            BigInteger gasLimit)throws IOException, TransactionException{
+        ExtendedRawTransaction rawTransaction =
+                transactionManager.createTransaction(gasPrice, gasLimit, to, data, value, null);
+        return transactionManager.sign(rawTransaction);
+        //return signAndSend(rawTransaction, callback);
+    }
+
+    protected void sendOnlySecond(
+            String signedTransaction,
+            TransactionSucCallback callback)throws IOException, TransactionException{
+
+        transactionManager.sendTransaction(signedTransaction, callback);
+        //return result;
+    }
+
     protected String createSeq(
             String to, String data, BigInteger value, BigInteger gasPrice, BigInteger gasLimit)
             throws IOException {
